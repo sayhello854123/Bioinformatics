@@ -1,0 +1,44 @@
+library(ggimage)
+library(grid)
+library(ggplot2)
+library(patchwork)
+library(EBImage)
+library(imager)
+library("jpeg")
+library(ggpubr)
+A1 <- readJPEG('HNRNPC.jpg')
+p0<-ggplot()+
+  background_image(A1)+
+  theme_void()
+A2 <- readJPEG('IGF2BP1.jpg')
+p1<-ggplot()+
+  background_image(A2)+
+  theme_void()
+A3 <- readJPEG('IGF2BP2.jpg')
+p2<-ggplot()+
+  background_image(A3)+
+  theme_void()
+A4 <- readJPEG('IGF2BP3.jpg')
+p3<-ggplot()+
+  background_image(A4)+
+  theme_void()
+A5 <- readJPEG('METTL5.jpg')
+p4<-ggplot()+
+  background_image(A5)+
+  theme_void()
+A6 <- readJPEG('Neutrophil _HNRNPC.jpg')
+p5<-ggplot()+
+  background_image(A6)+
+  theme_void()
+A7 <- readJPEG('Macrophage_HNRNPC.jpg')
+p6<-ggplot()+
+  background_image(A7)+
+  theme_void()
+
+p<- (p0|p1)/(p2|p3)/(p4|plot_spacer()) 
+p <- p+plot_annotation(tag_levels = 'A')
+ggsave(filename="survival.jpg",
+       p,
+       width=8,
+       heigh=8,
+       dpi = 1000)
