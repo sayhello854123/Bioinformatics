@@ -1,0 +1,142 @@
+options(stringsAsFactors = F)
+
+YXY<-read.table("count_yxy.csv",header = T,sep = ",")
+
+library(tidyverse)
+
+#####################################   mRNA差异表达分析####################################################
+
+# 数据过滤
+##下面进行标准化
+suppressPackageStartupMessages(library(DESeq2))
+suppressPackageStartupMessages(library(edgeR))
+##本次使用的方法是DESeq2中vst法 
+
+###制作countData
+mRNA_mycounts <- YXY
+keepGene=rowSums(edgeR::cpm(mRNA_mycounts[-1])>0) >=2
+table(keepGene);
+dim(mRNA_mycounts)
+
+##这是数据维度19668 和187
+
+dim(mRNA_mycounts[keepGene,])
+
+##剩余19275 7
+sample2<-c(rep("Model",3),rep("YXY",3))
+sample1<-c( "Model1", "Model2", "Model3","YXY1", "YXY2" ,"YXY3")
+metadata<-data.frame(sample1,sample2)
+names(metadata)<-c("ID","sample")
+mRNA_mycounts <-mRNA_mycounts[keepGene,]
+table(duplicated(mRNA_mycounts$gene_name))
+mRNA_mycounts<-mRNA_mycounts[!duplicated(mRNA_mycounts$gene_name), ]
+###构建 DESeq对象
+mRNA_dds <-DESeqDataSetFromMatrix(countData=mRNA_mycounts, 
+                                  colData=metadata, 
+                                  design=~sample,
+                                  tidy = T)
+
+
+### Count data transformations
+# 为下游的可视化和聚类分析做准备
+## rlog()、rlogTransformation()以及与ves()、varianceStabilizingTransformation()的功能是一样的，
+## 样本数超过100时，使用vst() 比 rlog() 快. 因为rlog需要拟合每个样本和每个基因的收缩项很耗费时间；
+
+mRNA_vsd <- vst(mRNA_dds , blind = FALSE)
+mRNA_exprSet_vst <- as.data.frame(assay(mRNA_vsd))
+save(mRNA_exprSet_vst,file = "YXY_mRNA_exprSet_vst.Rda")
+
+### Pre-filtering
+# dim(mRNA_dds)
+# 数据过滤也可以在这一步做
+# mRNA_dds <- mRNA_dds[ rowSums(counts(mRNA_dds)) > 1 ,]
+# dim(mRNA_dds)
+
+mRNA2_dds <- DESeq(mRNA_dds) 
+plotDispEsts(mRNA2_dds, main="Dispersion plot") 
+#save(mRNA_dds,file = "mRNA_dds_DEseq_mRNA_dds.Rda")
+
+#####################contrast后面三个参数，先是列名，再是分子和分母
+
+resYvsM <- results(mRNA2_dds , contrast = c("sample","YXY","Model"),tidy=TRUE)
+
+summary(resYvsM)
+
+# 按照padj进行排序
+resYvsM_order <- resYvsM[order(resYvsM$padj),] 
+resYvsM_diff <- resYvsM %>% filter(pvalue <0.05&abs(log2FoldChange)>0.585)
+
+
+
+
+#resTvsN_diff$log2FoldChange<-abs(resTvsN_diff$log2FoldChange)
+
+rownames(resYvsM_diff)<-resYvsM_diff$row
+names(resYvsM_diff)[1]<-"SYMBOL"
+library(clusterProfiler)
+eg = bitr(resYvsM_diff$SYMBOL, fromType="SYMBOL", toType="ENTREZID", OrgDb="org.Mm.eg.db")
+
+resYvsM_diff2<-inner_join(eg,resYvsM_diff,by="SYMBOL")
+
+resYvsM_diff2_real<-resYvsM_diff2[order(abs(resYvsM_diff2$log2FoldChange),decreasing = T),][1:300,]
+
+#write.table(resTvsN_diff2_real,"YXY_top300_real.xls",sep = "\t")
+#write.table(resTvsN_diff3,"YXY_top300.xls",sep = "\t")
+############# ID 转换############
+
+####heatmap热图
+#用行名提取数据
+library(pheatmap)
+#制作一个分组信息
+heatdata <- mRNA_exprSet_vst[resYvsM_diff2_real$SYMBOL,]
+names(heatdata)<-c("Model_1","Model_2","Model_3","YXY_1","YXY_2","YXY_3")
+#tiff(file = "G:/分析报告/DESeq/YXY_heatmap1.tiff", width = 2500, height = 2000, units = "px", res = 300)
+#如果注释出界，可以通过调整格子比例和字体修正
+pheatmap(heatdata, #热图的数据
+         cluster_rows = TRUE,#行聚类
+         cluster_cols = T,#列聚类，可以看出样本之间的区分度
+         #annotation_col =annotation_col, #标注样本分类
+         #annotation_legend=TRUE, # 显示注释
+         show_rownames = F,# 显示行名
+         scale = "row", #以行来标准化，这个功能很不错
+         color=colorRampPalette(c("navy", "white", "firebrick3"))(100),
+         #color=colorRampPalette(c("green","black","red"))(100),
+         #color =colorRampPalette(c("blue", "white","red"))(100),#调色
+         #filename = "heatmap_F.pdf",#是否保存
+         cellwidth = 60, cellheight = 1.3,# 格子比例
+         fontsize = 10
+)
+
+#dev.off()
+
+
+
+#volcano火山图
+##try drowing a volcano by gglot2
+library(ggplot2)
+library(ggrepel)
+#library(dplyr)
+data <- resYvsM_order
+data$significant <- as.factor(data$pvalue <0.05 & abs(data$log2FoldChange) > 0.585)
+data$gene <- data$row
+data=data[-1]
+data=na.omit(data)
+table(data$significant)
+p=ggplot(data=data, aes(x=log2FoldChange, y =-log10(pvalue),color=significant)) +
+  geom_point(alpha=0.8, size=1.2)+
+  scale_color_manual(values =c("black","red"))+
+  labs(title="Volcanoplot", x="log2 (fold change)",y="-log10 (p-value)")+
+  theme(plot.title = element_text(hjust = 0.4))+
+  geom_hline(yintercept = -log10(0.05),lty=4,lwd=0.6,alpha=0.8)+
+  geom_vline(xintercept = c(0.585,-0.585),lty=4,lwd=0.6,alpha=0.8)+
+  #theme(legend.position='none')
+  theme_bw()+
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),   
+        axis.line = element_line(colour = "black"))
+
+  #geom_text(aes(x=4,y=5,label="class is over"),col ="black",size = 10)+
+  #geom_text(data=subset(data, abs(logFC) > 3), aes(label=gene),col="green",alpha = 0.5)
+  p+geom_text_repel(data=subset(data, abs(log2FoldChange) > 3.5), aes(label=gene),col="black",alpha = 0.8)
+#ggsave("vocanol.pdf",,width = 7.09, height =5.6,dpi = 300)
