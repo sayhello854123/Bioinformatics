@@ -1,0 +1,86 @@
+library(limma)
+library(ggplot2)
+library(ggrepel)
+logFoldChange=1
+adjustP=0.05
+diff <- function(data,i){
+  #rt=read.table(data,sep="\t",header=T,check.names=F)
+  rt=as.matrix(data)
+  
+  
+  design <- model.matrix(~0+factor(modType))
+  colnames(design) <- c("con","treat")
+  fit <- lmFit(rt,design)
+  cont.matrix<-makeContrasts(treat-con,levels=design)
+  fit2 <- contrasts.fit(fit, cont.matrix)
+  fit2 <- eBayes(fit2)
+  
+  allDiff=topTable(fit2,adjust='fdr',number=200000)
+  
+  #write table
+  diffSig <- allDiff[with(allDiff, (abs(logFC)>logFoldChange & P.Value < adjustP )), ]
+  diffSig=cbind(id=row.names(diffSig),diffSig)
+  filename1 <-  paste0(picDir, 'diff.xls',sep='')
+  write.table(diffSig,file=filename1,sep="\t",row.names=F,quote=F)
+  diffUp <- allDiff[with(allDiff, (logFC>logFoldChange & P.Value < adjustP )), ]
+  diffUp=cbind(id=row.names(diffUp),diffUp)
+  filename2 <-  paste0(picDir, 'up.xls',sep='')
+  write.table(diffUp,file=filename2,sep="\t",row.names=F,quote=F)
+  diffDown <- allDiff[with(allDiff, (logFC<(-logFoldChange) & P.Value < adjustP )), ]
+  diffDown=cbind(id=row.names(diffDown),diffDown)
+  filename3 <-  paste0(picDir, 'down.xls',sep='')
+  write.table(diffDown,file=filename3,sep="\t",row.names=F,quote=F)
+  
+  allDiff$gene <- rownames(allDiff)
+  threshold <- as.factor(ifelse(allDiff$P.Value < adjustP &abs(allDiff$logFC) >logFoldChange,
+                                ifelse(allDiff$logFC > 1 ,'Up','Down'),'Stable'))
+  
+  p=ggplot(
+    #设置数据
+    allDiff, 
+    aes(x = logFC, 
+        y=-log10(P.Value),
+        colour=threshold)) +
+    geom_point(alpha=0.4, size=3.5) +
+    scale_color_manual(values=c("#00FF00", "#d2dae2","#DF0029"))+
+    
+    # 辅助线
+    geom_vline(xintercept=c(-1,1),lty=4,col="black",lwd=0.8) +
+    geom_hline(yintercept = -log10(adjustP),lty=4,col="black",lwd=0.8) +
+    
+    # 坐标轴
+    labs(x="log2(fold change)",
+         y="-log10 (p-value)")+
+    theme_bw()+
+    
+    # 图例
+    theme(plot.title = element_text(hjust = 0.5), 
+          legend.position="right", 
+          legend.title = element_blank()
+    )
+  allDiff$label = ifelse(allDiff$P.Value < adjustP & abs(allDiff$logFC) >logFoldChange, 
+                         as.character(allDiff$gene),"")
+  P<- p+geom_text_repel(data = allDiff, aes(x = logFC, 
+                                            y = -log10(P.Value), 
+                                            label = label),
+                        size = 3,box.padding = unit(0.5, "lines"),
+                        point.padding = unit(0.8, "lines"), 
+                        segment.color = "black", 
+                        show.legend = FALSE)
+  filename4 <- paste0(i, ".pdf",sep='')
+  outfile <- paste(picDir,filename4,sep="")
+  pdf(file=outfile,onefile = FALSE,width = 8,height = 8)
+  print(P)
+  dev.off()
+}
+
+if(T){
+dir.create('01.chemosensitive_normal')
+picDir='./01.chemosensitive_normal/'
+lab='chemosensitive_normal'
+modType=c(rep("normal",6),rep("tumor",2))
+rt1 <- read.table('./00.data/1.txt',sep = '\t',header = T,check.names = F,row.names = 1)
+rt2 <- read.table('./00.data/5.txt',sep = '\t',header = T,check.names = F,row.names = 1)
+rt <- cbind(rt1,rt2)
+diff(data = rt,i=lab)
+}
