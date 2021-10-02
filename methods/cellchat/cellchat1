@@ -1,0 +1,35 @@
+library(CellChat)
+library(tidyverse)
+library(ggalluvial)
+library(Seurat)
+rm(list=ls())
+options(stringsAsFactors = FALSE)
+scRNA <- readRDS('00.data/01.single cell/scRNA5.rds')
+#scRNA <- UpdateSeuratObject(scRNA)
+
+#创建cellchat对象
+data.input = scRNA@assays$RNA@data
+meta = scRNA@meta.data
+cell.use = rownames(meta)[meta$immune_annotation == "immune"]
+data.input = data.input[, cell.use]
+meta = meta[cell.use, ]
+
+cellchat <- createCellChat(object = data.input, meta = meta, group.by = "Type")
+cellchat <- addMeta(cellchat, meta = meta)
+cellchat <- setIdent(cellchat, ident.use ="Type" ) 
+groupSize <- as.numeric(table(cellchat@idents))
+CellChatDB <- CellChatDB.human
+CellChatDB.use <- CellChatDB
+cellchat@DB <- CellChatDB.use
+cellchat <- subsetData(cellchat) 
+cellchat <- identifyOverExpressedGenes(cellchat)
+cellchat <- identifyOverExpressedInteractions(cellchat)
+cellchat <- projectData(cellchat, PPI.human)
+cellchat <- computeCommunProb(cellchat)
+cellchat <- computeCommunProbPathway(cellchat)
+cellchat <- aggregateNet(cellchat)
+
+groupSize <- as.numeric(table(cellchat@idents))
+par(mfrow = c(1,2), xpd=TRUE)
+netVisual_circle(cellchat@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Number of interactions")
+netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Interaction weights/strength")
