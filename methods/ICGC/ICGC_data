@@ -1,0 +1,83 @@
+use strict;
+use warnings;
+
+my %hash1=();
+my %hash2=();
+my $donorCol=1;              #病人id所在列
+$donorCol--;
+my $specimenCol=3;           #specimen id在第几列
+$specimenCol--;
+my $ensemblCol=8;            #ensembl或基因在第几列
+$ensemblCol--;
+my $expCol=9;                #基因表达在第几列
+$expCol--;
+my $file=$ARGV[0];
+my $sampleFile1="sample1.txt";
+my $sampleFile2="sample2.txt";
+
+open(RF,"$sampleFile1") or die $!;
+while(my $line=<RF>){
+	chomp($line);
+	$hash1{$line}=1;
+}
+close(RF);
+my @samp1e=(localtime(time));
+
+open(RF,"$sampleFile2") or die $!;
+while(my $line=<RF>){
+	chomp($line);
+	$hash2{$line}=1;
+}
+close(RF);
+
+open(RF,"$file") or die $!;
+my %samples1=();
+my %samples2=();
+my %hash=();
+while(my $line=<RF>){
+	next if($.==1);
+	chomp($line);
+	my @arr=split(/\t/,$line);
+	my $sampleId="";
+	if(exists $hash1{$arr[$specimenCol]}){
+		$sampleId="$arr[$specimenCol]-$arr[$donorCol]-N";
+		$samples1{$sampleId}=1;
+	}
+	elsif(exists $hash2{$arr[$specimenCol]}){
+		$sampleId="$arr[$specimenCol]-$arr[$donorCol]-T";
+		$samples2{$sampleId}=1;
+	}
+	$hash{$arr[$ensemblCol]}{$sampleId}=$arr[$expCol];
+}
+close(RF);
+
+my @samples1=keys %samples1;
+my @samples2=keys %samples2;
+open(WF,">sampleExp.txt") or die $!;
+print WF "id\t" . join("\t",@samples1) . "\t" . join("\t",@samples2) . "\n";
+foreach my $key (sort(keys %hash)){
+	print WF $key;
+	
+	foreach my $sample1(@samples1){
+		if(exists $hash{$key}{$sample1}){
+		  print WF "\t$hash{$key}{$sample1}";
+		}
+		else{
+			print WF "\t0";
+		}
+	}
+	foreach my $sample2(@samples2){
+		if(exists $hash{$key}{$sample2}){
+		  print WF "\t$hash{$key}{$sample2}";
+		}
+		else{
+			print WF "\t0";
+		}
+	}
+	print WF "\n";
+}
+
+
+
+print "sample1: " . ($#samples1+1) . "\n";
+print "sample2: " . ($#samples2+1) . "\n";
