@@ -1,0 +1,8 @@
+Cisplatin
+Etoposide
+Docetaxel
+Gefitinib
+Erlotinib
+Gemcitabine
+Paclitaxel
+Pemetrexed
