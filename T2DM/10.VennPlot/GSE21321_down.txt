@@ -1,9 +1,0 @@
-hsa-miR-16-5p
-hsa-miR-146a
-hsa-miR-485-3p
-hsa-miR-30d
-hsa-miR-720
-hsa-miR-519e
-hsa-miR-1308
-hsa-miR-92a
-hsa-miR-1246
